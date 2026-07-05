@@ -1,0 +1,955 @@
+import { useState, useEffect, useRef } from "react";
+import {
+  Home, Package, Plus, ChefHat,
+  Camera, X, ChevronLeft, ChevronRight,
+  Trash2, Search, Clock, CheckCircle2,
+  RefreshCw, Bell,
+} from "lucide-react";
+
+// ============ TYPES ============
+type Category = "fruit" | "vegetable" | "meat" | "seafood" | "dairy" | "grain" | "condiment" | "beverage" | "other";
+type Location = "fridge" | "freezer" | "room";
+type Tab = "home" | "ingredients" | "add" | "recipes";
+
+interface Ingredient {
+  id: string;
+  name: string;
+  category: Category;
+  location: Location;
+  quantity: number;
+  unit: string;
+  registeredAt: Date;
+  expiryDate: Date;
+}
+
+// ============ CONSTANTS ============
+const CATEGORIES: Record<Category, { label: string; emoji: string; bg: string; text: string }> = {
+  fruit:     { label: "과일",   emoji: "🍎", bg: "bg-red-50",    text: "text-red-600" },
+  vegetable: { label: "채소",   emoji: "🥦", bg: "bg-green-50",  text: "text-green-700" },
+  meat:      { label: "고기",   emoji: "🥩", bg: "bg-rose-50",   text: "text-rose-600" },
+  seafood:   { label: "수산물", emoji: "🐟", bg: "bg-blue-50",   text: "text-blue-600" },
+  dairy:     { label: "유제품", emoji: "🥛", bg: "bg-yellow-50", text: "text-yellow-600" },
+  grain:     { label: "곡류",   emoji: "🌾", bg: "bg-amber-50",  text: "text-amber-600" },
+  condiment: { label: "양념",   emoji: "🧂", bg: "bg-orange-50", text: "text-orange-600" },
+  beverage:  { label: "음료",   emoji: "🧃", bg: "bg-cyan-50",   text: "text-cyan-600" },
+  other:     { label: "기타",   emoji: "📦", bg: "bg-gray-50",   text: "text-gray-600" },
+};
+
+const LOCATIONS: Record<Location, { label: string; emoji: string; bg: string; text: string; border: string }> = {
+  fridge:  { label: "냉장실", emoji: "🌡️", bg: "bg-sky-50",    text: "text-sky-700",    border: "border-sky-100" },
+  freezer: { label: "냉동실", emoji: "❄️", bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-100" },
+  room:    { label: "실온",   emoji: "☀️", bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-100" },
+};
+
+const UNITS = ["개", "g", "kg", "ml", "L", "봉", "팩", "병", "캔", "묶음", "줄"];
+
+const RECIPES = [
+  {
+    id: "1",
+    name: "삼겹살 볶음밥",
+    ingredients: ["삼겹살", "달걀", "당근", "양파"],
+    time: "15분",
+    difficulty: "쉬움",
+    emoji: "🍳",
+    description: "집에 있는 재료로 간단하게 만드는 볶음밥",
+    steps: ["삼겹살을 작게 썰어 팬에 볶는다", "당근, 양파를 넣고 함께 볶는다", "밥을 넣고 간장, 소금으로 간한다", "달걀 후라이를 올려 완성"],
+  },
+  {
+    id: "2",
+    name: "연어 샐러드",
+    ingredients: ["연어", "당근", "양파"],
+    time: "20분",
+    difficulty: "보통",
+    emoji: "🥗",
+    description: "신선한 연어로 만드는 건강한 샐러드",
+    steps: ["연어를 한 입 크기로 자른다", "채소를 씻어 준비한다", "드레싱을 만들어 버무린다"],
+  },
+  {
+    id: "3",
+    name: "달걀 볶음",
+    ingredients: ["달걀", "양파", "당근"],
+    time: "10분",
+    difficulty: "쉬움",
+    emoji: "🥚",
+    description: "간단하고 영양 만점인 달걀 볶음",
+    steps: ["달걀을 풀어놓는다", "양파, 당근을 팬에 볶는다", "달걀을 붓고 저어가며 익힌다"],
+  },
+  {
+    id: "4",
+    name: "사과 스무디",
+    ingredients: ["사과", "우유"],
+    time: "5분",
+    difficulty: "쉬움",
+    emoji: "🥤",
+    description: "아침에 간편하게 즐기는 건강 스무디",
+    steps: ["사과를 깍둑썰기 한다", "우유와 함께 블렌더에 넣는다", "꿀을 살짝 넣어 갈아준다"],
+  },
+  {
+    id: "5",
+    name: "두부 된장국",
+    ingredients: ["두부", "양파"],
+    time: "20분",
+    difficulty: "쉬움",
+    emoji: "🍲",
+    description: "구수하고 따뜻한 전통 된장국",
+    steps: ["물을 끓이고 된장을 풀어준다", "두부를 깍둑썰기 한다", "양파, 두부를 넣고 5분 더 끓인다"],
+  },
+  {
+    id: "6",
+    name: "카레라이스",
+    ingredients: ["당근", "양파", "삼겹살"],
+    time: "40분",
+    difficulty: "보통",
+    emoji: "🍛",
+    description: "집에서 만드는 정통 카레",
+    steps: ["재료를 한 입 크기로 자른다", "기름에 볶다가 물을 붓는다", "카레 루를 넣고 끓인다"],
+  },
+  {
+    id: "7",
+    name: "연어 스테이크",
+    ingredients: ["연어"],
+    time: "15분",
+    difficulty: "보통",
+    emoji: "🍣",
+    description: "간단하게 만드는 레스토랑 스타일 연어 요리",
+    steps: ["연어에 소금, 후추를 뿌린다", "올리브오일을 두른 팬에 껍질부터 굽는다", "레몬즙을 뿌려 마무리"],
+  },
+];
+
+// ============ HELPERS ============
+const getDaysUntilExpiry = (date: Date): number => {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const exp = new Date(date);
+  exp.setHours(0, 0, 0, 0);
+  return Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+};
+
+const getExpiryStatus = (days: number) => {
+  if (days < 0) return "expired";
+  if (days <= 1) return "critical";
+  if (days <= 3) return "warning";
+  return "ok";
+};
+
+const formatDate = (date: Date): string =>
+  `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+
+const genId = () => Math.random().toString(36).slice(2);
+
+const today = new Date();
+const addDays = (n: number) => {
+  const d = new Date(today);
+  d.setDate(d.getDate() + n);
+  return d;
+};
+
+const INITIAL_INGREDIENTS: Ingredient[] = [
+  { id: genId(), name: "사과",   category: "fruit",     location: "fridge",  quantity: 5,   unit: "개", registeredAt: addDays(-4), expiryDate: addDays(2) },
+  { id: genId(), name: "삼겹살", category: "meat",      location: "freezer", quantity: 500, unit: "g",  registeredAt: addDays(-7), expiryDate: addDays(3) },
+  { id: genId(), name: "당근",   category: "vegetable", location: "fridge",  quantity: 3,   unit: "개", registeredAt: addDays(-3), expiryDate: addDays(1) },
+  { id: genId(), name: "우유",   category: "dairy",     location: "fridge",  quantity: 1,   unit: "L",  registeredAt: addDays(-2), expiryDate: addDays(1) },
+  { id: genId(), name: "연어",   category: "seafood",   location: "freezer", quantity: 300, unit: "g",  registeredAt: addDays(-4), expiryDate: addDays(10) },
+  { id: genId(), name: "달걀",   category: "dairy",     location: "fridge",  quantity: 10,  unit: "개", registeredAt: addDays(-1), expiryDate: addDays(13) },
+  { id: genId(), name: "양파",   category: "vegetable", location: "room",    quantity: 4,   unit: "개", registeredAt: addDays(-5), expiryDate: addDays(9) },
+  { id: genId(), name: "두부",   category: "other",     location: "fridge",  quantity: 1,   unit: "팩", registeredAt: addDays(-1), expiryDate: addDays(1) },
+];
+
+// ============ MINI CALENDAR ============
+interface MiniCalendarProps {
+  value: Date | null;
+  onChange: (date: Date) => void;
+  onClose: () => void;
+  minDate?: Date;
+}
+
+function MiniCalendar({ value, onChange, onClose, minDate }: MiniCalendarProps) {
+  const [viewYear, setViewYear] = useState(value?.getFullYear() ?? today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(value?.getMonth() ?? today.getMonth());
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  const isSelected = (d: number) =>
+    !!value && value.getFullYear() === viewYear && value.getMonth() === viewMonth && value.getDate() === d;
+
+  const isDisabled = (d: number) => {
+    if (!minDate) return false;
+    const dt = new Date(viewYear, viewMonth, d);
+    dt.setHours(0, 0, 0, 0);
+    const min = new Date(minDate);
+    min.setHours(0, 0, 0, 0);
+    return dt < min;
+  };
+
+  const isToday = (d: number) => {
+    const t = new Date();
+    return t.getFullYear() === viewYear && t.getMonth() === viewMonth && t.getDate() === d;
+  };
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40" />
+      <div
+        className="relative bg-white rounded-t-3xl p-5 w-full max-w-sm z-10 shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4" />
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+            <ChevronLeft size={18} />
+          </button>
+          <span className="font-bold text-gray-800">{viewYear}년 {viewMonth + 1}월</span>
+          <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        <div className="grid grid-cols-7 mb-2">
+          {WEEKDAYS.map((w, i) => (
+            <div key={w} className={`text-center text-xs font-semibold py-1 ${i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-gray-400"}`}>{w}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-y-1">
+          {cells.map((d, i) => (
+            <div key={i} className="flex items-center justify-center">
+              {d ? (
+                <button
+                  disabled={isDisabled(d)}
+                  onClick={() => { onChange(new Date(viewYear, viewMonth, d)); onClose(); }}
+                  className={`w-9 h-9 rounded-full text-sm transition-colors font-medium ${
+                    isSelected(d)
+                      ? "bg-green-600 text-white shadow-md"
+                      : isDisabled(d)
+                        ? "text-gray-200 cursor-not-allowed"
+                        : isToday(d)
+                          ? "bg-green-50 text-green-700 border border-green-200"
+                          : "hover:bg-green-50 text-gray-700"
+                  }`}
+                >
+                  {d}
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={onClose}
+          className="mt-4 w-full py-3 bg-gray-100 rounded-2xl text-gray-600 font-semibold hover:bg-gray-200 transition-colors"
+        >
+          취소
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============ EXPIRY BADGE ============
+function ExpiryBadge({ expiryDate }: { expiryDate: Date }) {
+  const days = getDaysUntilExpiry(expiryDate);
+  const status = getExpiryStatus(days);
+  const config = {
+    expired:  { bg: "bg-gray-100",    text: "text-gray-500",   label: "만료됨" },
+    critical: { bg: "bg-red-100",     text: "text-red-600",    label: days === 0 ? "오늘 만료" : "내일 만료" },
+    warning:  { bg: "bg-orange-100",  text: "text-orange-600", label: `${days}일 남음` },
+    ok:       { bg: "bg-green-100",   text: "text-green-700",  label: `${days}일 남음` },
+  }[status];
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${config.bg} ${config.text}`}>
+      {config.label}
+    </span>
+  );
+}
+
+// ============ HOME VIEW ============
+function HomeView({ ingredients, onAddClick }: { ingredients: Ingredient[]; onAddClick: () => void }) {
+  const alerts = ingredients
+    .filter(i => { const d = getDaysUntilExpiry(i.expiryDate); return d >= 0 && d <= 3; })
+    .sort((a, b) => getDaysUntilExpiry(a.expiryDate) - getDaysUntilExpiry(b.expiryDate));
+  const expired = ingredients.filter(i => getDaysUntilExpiry(i.expiryDate) < 0);
+
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+    if ("Notification" in window && Notification.permission === "granted") {
+      alerts.forEach(i => {
+        const d = getDaysUntilExpiry(i.expiryDate);
+        if (d === 1 || d === 3) {
+          new Notification("⚠️ 소비기한 임박!", { body: `${i.name}의 소비기한이 ${d}일 남았어요.` });
+        }
+      });
+    }
+  }, []);
+
+  const counts = {
+    fridge:  ingredients.filter(i => i.location === "fridge").length,
+    freezer: ingredients.filter(i => i.location === "freezer").length,
+    room:    ingredients.filter(i => i.location === "room").length,
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 pt-5 pb-4 space-y-5" style={{ scrollbarWidth: "none" }}>
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">오늘도 건강하게 🌱</p>
+          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: "Nunito, sans-serif" }}>우리집 냉장고</h1>
+        </div>
+        <button
+          onClick={onAddClick}
+          className="bg-primary text-white p-3 rounded-2xl shadow-lg hover:bg-green-700 transition-colors"
+        >
+          <Plus size={20} />
+        </button>
+      </div>
+
+      {/* Storage cards */}
+      <div className="grid grid-cols-3 gap-2.5">
+        {(["fridge", "freezer", "room"] as Location[]).map(loc => (
+          <div key={loc} className={`${LOCATIONS[loc].bg} border ${LOCATIONS[loc].border} rounded-2xl p-3 text-center`}>
+            <div className="text-2xl mb-1">{LOCATIONS[loc].emoji}</div>
+            <div className={`text-xl font-bold ${LOCATIONS[loc].text}`} style={{ fontFamily: "Nunito, sans-serif" }}>
+              {counts[loc]}
+            </div>
+            <div className="text-xs text-gray-500 mt-0.5">{LOCATIONS[loc].label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Alert section */}
+      {(alerts.length > 0 || expired.length > 0) ? (
+        <div>
+          <h2 className="text-sm font-bold text-gray-700 mb-2.5 flex items-center gap-1.5">
+            <Bell size={14} className="text-orange-500" />
+            소비기한 알림
+            <span className="ml-auto text-xs font-semibold bg-red-500 text-white px-2 py-0.5 rounded-full">
+              {alerts.length + expired.length}건
+            </span>
+          </h2>
+          <div className="space-y-2">
+            {expired.map(i => (
+              <div key={i.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-2xl p-3">
+                <div className="w-10 h-10 flex items-center justify-center text-lg bg-gray-100 rounded-xl flex-shrink-0">
+                  {CATEGORIES[i.category].emoji}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-700 text-sm">{i.name}</p>
+                  <p className="text-xs text-gray-400">{formatDate(i.expiryDate)} 만료</p>
+                </div>
+                <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-semibold">만료됨</span>
+              </div>
+            ))}
+            {alerts.map(i => {
+              const d = getDaysUntilExpiry(i.expiryDate);
+              const isCrit = d <= 1;
+              return (
+                <div key={i.id} className={`flex items-center gap-3 ${isCrit ? "bg-red-50 border-red-100" : "bg-orange-50 border-orange-100"} border rounded-2xl p-3`}>
+                  <div className={`w-10 h-10 flex items-center justify-center text-lg ${isCrit ? "bg-red-100" : "bg-orange-100"} rounded-xl flex-shrink-0`}>
+                    {CATEGORIES[i.category].emoji}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-800 text-sm">{i.name}</p>
+                    <p className="text-xs text-gray-400">{formatDate(i.expiryDate)} 만료</p>
+                  </div>
+                  <ExpiryBadge expiryDate={i.expiryDate} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-4 flex items-center gap-3">
+          <CheckCircle2 size={22} className="text-green-500 flex-shrink-0" />
+          <div>
+            <p className="font-bold text-green-800 text-sm">소비기한 걱정 없어요!</p>
+            <p className="text-xs text-green-600 mt-0.5">모든 재료가 3일 이상 남아있어요</p>
+          </div>
+        </div>
+      )}
+
+      {/* Total summary */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-4 flex items-center justify-between shadow-sm">
+        <div>
+          <p className="text-xs text-gray-400 mb-0.5">전체 보관 재료</p>
+          <p className="text-3xl font-bold text-gray-900" style={{ fontFamily: "Nunito, sans-serif" }}>
+            {ingredients.length}
+            <span className="text-sm font-normal text-gray-400 ml-1">가지</span>
+          </p>
+        </div>
+        <div className="text-5xl">🥗</div>
+      </div>
+
+      {/* Category breakdown */}
+      <div>
+        <h2 className="text-sm font-bold text-gray-700 mb-2.5">카테고리별 현황</h2>
+        <div className="grid grid-cols-3 gap-2">
+          {(Object.entries(CATEGORIES) as [Category, typeof CATEGORIES[Category]][])
+            .map(([cat, cfg]) => {
+              const count = ingredients.filter(i => i.category === cat).length;
+              if (count === 0) return null;
+              return (
+                <div key={cat} className={`${cfg.bg} rounded-2xl p-3 flex items-center gap-2`}>
+                  <span className="text-xl">{cfg.emoji}</span>
+                  <div>
+                    <p className="text-xs text-gray-500">{cfg.label}</p>
+                    <p className={`font-bold text-sm ${cfg.text}`}>{count}개</p>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============ INGREDIENTS VIEW ============
+function IngredientsView({ ingredients, onDelete }: { ingredients: Ingredient[]; onDelete: (id: string) => void }) {
+  const [selectedCategory, setSelectedCategory] = useState<Category | "all">("all");
+  const [selectedLocation, setSelectedLocation] = useState<Location | "all">("all");
+  const [search, setSearch] = useState("");
+
+  const filtered = ingredients.filter(i => {
+    const matchCat = selectedCategory === "all" || i.category === selectedCategory;
+    const matchLoc = selectedLocation === "all" || i.location === selectedLocation;
+    const matchSearch = !search || i.name.toLowerCase().includes(search.toLowerCase());
+    return matchCat && matchLoc && matchSearch;
+  });
+
+  const usedCategories = Array.from(new Set(ingredients.map(i => i.category)));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="px-4 pt-5 pb-3 space-y-3">
+        <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: "Nunito, sans-serif" }}>재료 보관함</h1>
+        <div className="relative">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="재료 검색..."
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-300 shadow-sm"
+          />
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+          <button
+            onClick={() => setSelectedCategory("all")}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${selectedCategory === "all" ? "bg-green-600 text-white shadow-sm" : "bg-white border border-gray-100 text-gray-600"}`}
+          >
+            전체
+          </button>
+          {usedCategories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${selectedCategory === cat ? "bg-green-600 text-white shadow-sm" : "bg-white border border-gray-100 text-gray-600"}`}
+            >
+              {CATEGORIES[cat].emoji} {CATEGORIES[cat].label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-2" style={{ scrollbarWidth: "none" }}>
+          {(["all", "fridge", "freezer", "room"] as const).map(loc => (
+            <button
+              key={loc}
+              onClick={() => setSelectedLocation(loc)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${selectedLocation === loc ? "bg-gray-800 text-white shadow-sm" : "bg-white border border-gray-100 text-gray-500"}`}
+            >
+              {loc === "all" ? "전체" : `${LOCATIONS[loc].emoji} ${LOCATIONS[loc].label}`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2" style={{ scrollbarWidth: "none" }}>
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-300">
+            <div className="text-5xl mb-3">🔍</div>
+            <p className="text-sm font-medium">재료가 없어요</p>
+          </div>
+        ) : filtered.map(i => {
+          const days = getDaysUntilExpiry(i.expiryDate);
+          const status = getExpiryStatus(days);
+          const borderCls = status === "critical" ? "border-red-200" : status === "warning" ? "border-orange-200" : "border-gray-100";
+          return (
+            <div key={i.id} className={`bg-white border ${borderCls} rounded-2xl p-3.5 flex items-center gap-3 shadow-sm`}>
+              <div className={`w-11 h-11 flex items-center justify-center text-xl ${CATEGORIES[i.category].bg} rounded-xl flex-shrink-0`}>
+                {CATEGORIES[i.category].emoji}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-bold text-gray-900 text-sm">{i.name}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${LOCATIONS[i.location].bg} ${LOCATIONS[i.location].text}`}>
+                    {LOCATIONS[i.location].emoji} {LOCATIONS[i.location].label}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">{i.quantity}{i.unit}</span>
+                  <span className="text-gray-200">·</span>
+                  <ExpiryBadge expiryDate={i.expiryDate} />
+                </div>
+                <p className="text-xs text-gray-300 mt-0.5">{formatDate(i.expiryDate)} 까지</p>
+              </div>
+              <button
+                onClick={() => onDelete(i.id)}
+                className="p-2 text-gray-200 hover:text-red-400 hover:bg-red-50 rounded-xl transition-colors flex-shrink-0"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============ ADD VIEW ============
+function AddIngredientView({ onAdd }: { onAdd: (data: Omit<Ingredient, "id">) => void }) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<Category>("vegetable");
+  const [location, setLocation] = useState<Location>("fridge");
+  const [quantity, setQuantity] = useState("1");
+  const [unit, setUnit] = useState("개");
+  const [registeredAt, setRegisteredAt] = useState<Date>(new Date());
+  const [expiryDate, setExpiryDate] = useState<Date | null>(null);
+  const [calendarFor, setCalendarFor] = useState<"registered" | "expiry" | null>(null);
+  const [receiptPhoto, setReceiptPhoto] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [detectedItems, setDetectedItems] = useState<string[]>([]);
+  const [success, setSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleReceiptUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      setReceiptPhoto(ev.target?.result as string);
+      setAnalyzing(true);
+      setTimeout(() => {
+        setAnalyzing(false);
+        setDetectedItems(["사과 5개", "우유 1L", "달걀 12개", "당근 3개", "양파 2개"]);
+      }, 2000);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmit = () => {
+    if (!name.trim() || !expiryDate) return;
+    onAdd({ name: name.trim(), category, location, quantity: parseFloat(quantity) || 1, unit, registeredAt, expiryDate });
+    setSuccess(true);
+    setTimeout(() => {
+      setName(""); setQuantity("1"); setExpiryDate(null);
+      setReceiptPhoto(null); setDetectedItems([]); setSuccess(false);
+    }, 1200);
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 pt-5 pb-6" style={{ scrollbarWidth: "none" }}>
+      <h1 className="text-2xl font-bold text-gray-900 mb-5" style={{ fontFamily: "Nunito, sans-serif" }}>재료 추가</h1>
+
+      {/* Receipt upload */}
+      <div className="mb-5">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">영수증으로 등록</p>
+        {!receiptPhoto ? (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full border-2 border-dashed border-gray-200 rounded-2xl py-7 flex flex-col items-center gap-2 hover:border-green-300 hover:bg-green-50 transition-colors text-gray-400 group"
+          >
+            <Camera size={28} className="group-hover:text-green-500 transition-colors" />
+            <span className="text-sm font-medium">영수증 사진 업로드</span>
+            <span className="text-xs">탭하여 사진 선택</span>
+          </button>
+        ) : (
+          <div className="relative rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
+            <img src={receiptPhoto} alt="영수증" className="w-full h-36 object-cover" />
+            <button
+              onClick={() => { setReceiptPhoto(null); setDetectedItems([]); }}
+              className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1.5 hover:bg-black/70 transition-colors"
+            >
+              <X size={14} />
+            </button>
+            {analyzing && (
+              <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
+                <RefreshCw size={22} className="text-white animate-spin" />
+                <p className="text-white text-sm font-medium">AI 분석 중...</p>
+              </div>
+            )}
+          </div>
+        )}
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleReceiptUpload} />
+
+        {detectedItems.length > 0 && (
+          <div className="mt-2.5 bg-green-50 border border-green-100 rounded-2xl p-3.5">
+            <p className="text-xs font-bold text-green-700 mb-2">✨ 감지된 재료 (탭하여 자동 입력)</p>
+            <div className="flex flex-wrap gap-2">
+              {detectedItems.map((item, i) => (
+                <button
+                  key={i}
+                  onClick={() => setName(item.split(" ")[0])}
+                  className="text-xs bg-white border border-green-200 text-green-700 px-2.5 py-1 rounded-lg hover:bg-green-100 transition-colors font-medium"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-5">
+        {/* Name */}
+        <div>
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">재료 이름 *</label>
+          <input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="예: 사과, 삼겹살, 우유..."
+            className="w-full px-4 py-3 bg-white border border-gray-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-300 shadow-sm"
+          />
+        </div>
+
+        {/* Category */}
+        <div>
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">카테고리</label>
+          <div className="grid grid-cols-3 gap-2">
+            {(Object.entries(CATEGORIES) as [Category, typeof CATEGORIES[Category]][]).map(([cat, cfg]) => (
+              <button
+                key={cat}
+                onClick={() => setCategory(cat)}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs border-2 transition-all font-semibold ${
+                  category === cat ? "bg-green-600 text-white border-green-600 shadow-sm" : "bg-white text-gray-600 border-gray-100 hover:border-green-200"
+                }`}
+              >
+                <span className="text-base">{cfg.emoji}</span>
+                <span className="truncate">{cfg.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Location */}
+        <div>
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">보관 장소</label>
+          <div className="grid grid-cols-3 gap-2">
+            {(Object.entries(LOCATIONS) as [Location, typeof LOCATIONS[Location]][]).map(([loc, cfg]) => (
+              <button
+                key={loc}
+                onClick={() => setLocation(loc)}
+                className={`flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs border-2 transition-all font-semibold ${
+                  location === loc ? "bg-green-600 text-white border-green-600 shadow-sm" : "bg-white text-gray-600 border-gray-100 hover:border-green-200"
+                }`}
+              >
+                <span>{cfg.emoji}</span>
+                <span>{cfg.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Quantity + Unit */}
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">수량</label>
+            <input
+              type="number"
+              value={quantity}
+              onChange={e => setQuantity(e.target.value)}
+              min="0"
+              className="w-full px-4 py-3 bg-white border border-gray-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-300 shadow-sm"
+            />
+          </div>
+          <div className="w-28">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">단위</label>
+            <select
+              value={unit}
+              onChange={e => setUnit(e.target.value)}
+              className="w-full px-3 py-3 bg-white border border-gray-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-300 shadow-sm"
+            >
+              {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Dates */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">등록일</label>
+            <button
+              onClick={() => setCalendarFor("registered")}
+              className="w-full px-3 py-3 bg-white border border-gray-100 rounded-xl text-sm text-left text-gray-700 hover:border-green-300 transition-colors flex items-center gap-2 shadow-sm"
+            >
+              <Clock size={13} className="text-gray-400 flex-shrink-0" />
+              <span className="truncate text-xs">{formatDate(registeredAt)}</span>
+            </button>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">소비기한 *</label>
+            <button
+              onClick={() => setCalendarFor("expiry")}
+              className={`w-full px-3 py-3 border-2 rounded-xl text-sm text-left flex items-center gap-2 transition-all shadow-sm ${
+                expiryDate ? "bg-green-50 border-green-300 text-green-700" : "bg-white border-gray-100 text-gray-400 hover:border-green-300"
+              }`}
+            >
+              <Clock size={13} className="flex-shrink-0" />
+              <span className="truncate text-xs">{expiryDate ? formatDate(expiryDate) : "날짜 선택"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Submit */}
+        <button
+          onClick={handleSubmit}
+          disabled={!name.trim() || !expiryDate}
+          className={`w-full py-4 rounded-2xl font-bold text-base transition-all ${
+            success
+              ? "bg-green-500 text-white"
+              : !name.trim() || !expiryDate
+                ? "bg-gray-100 text-gray-300 cursor-not-allowed"
+                : "bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg"
+          }`}
+        >
+          {success ? "✓ 등록 완료!" : "재료 등록하기"}
+        </button>
+      </div>
+
+      {calendarFor && (
+        <MiniCalendar
+          value={calendarFor === "registered" ? registeredAt : expiryDate}
+          onChange={d => {
+            if (calendarFor === "registered") setRegisteredAt(d);
+            else setExpiryDate(d);
+          }}
+          onClose={() => setCalendarFor(null)}
+          minDate={calendarFor === "expiry" ? registeredAt : undefined}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============ RECIPES VIEW ============
+function RecipesView({ ingredients }: { ingredients: Ingredient[] }) {
+  const [selectedRecipe, setSelectedRecipe] = useState<typeof RECIPES[0] | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const myNames = ingredients.map(i => i.name);
+
+  const withScore = RECIPES.map(r => {
+    const matched = r.ingredients.filter(ing => myNames.some(n => n.includes(ing) || ing.includes(n)));
+    return { ...r, matched, score: matched.length / r.ingredients.length };
+  }).sort((a, b) => b.score - a.score);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 1200);
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 pt-5 pb-4" style={{ scrollbarWidth: "none" }}>
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: "Nunito, sans-serif" }}>레시피 추천</h1>
+          <p className="text-xs text-gray-400 mt-0.5">보관 재료 기반 AI 추천</p>
+        </div>
+        <button
+          onClick={handleRefresh}
+          className="p-2.5 bg-white border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
+        >
+          <RefreshCw size={16} className={`text-gray-500 ${refreshing ? "animate-spin" : ""}`} />
+        </button>
+      </div>
+
+      {/* Current ingredients */}
+      <div className="bg-green-50 border border-green-100 rounded-2xl p-3.5 mb-4">
+        <p className="text-xs font-bold text-green-700 mb-2">현재 보관 재료</p>
+        <div className="flex flex-wrap gap-1.5">
+          {ingredients.map(i => (
+            <span key={i.id} className="text-xs bg-white border border-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+              {CATEGORIES[i.category].emoji} {i.name}
+            </span>
+          ))}
+          {ingredients.length === 0 && <span className="text-xs text-green-500">재료를 등록해주세요</span>}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {withScore.map(r => (
+          <button
+            key={r.id}
+            onClick={() => setSelectedRecipe(r)}
+            className="w-full bg-white border border-gray-100 rounded-2xl p-4 text-left hover:border-green-200 hover:shadow-md transition-all shadow-sm"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 border border-orange-100">
+                {r.emoji}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-bold text-gray-900 text-sm">{r.name}</span>
+                  <span className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-semibold border border-orange-100">{r.difficulty}</span>
+                </div>
+                <p className="text-xs text-gray-400 mb-2 leading-relaxed">{r.description}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">⏱ {r.time}</span>
+                  <span className="text-gray-200">·</span>
+                  <span className={`text-xs font-bold ${r.score === 1 ? "text-green-600" : r.score > 0.5 ? "text-orange-500" : "text-gray-400"}`}>
+                    재료 {r.matched.length}/{r.ingredients.length}개 보유
+                  </span>
+                </div>
+                <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${r.score === 1 ? "bg-green-500" : r.score > 0.5 ? "bg-orange-400" : "bg-gray-300"}`}
+                    style={{ width: `${r.score * 100}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Detail modal */}
+      {selectedRecipe && (
+        <div className="fixed inset-0 z-50 flex items-end" onClick={() => setSelectedRecipe(null)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div
+            className="relative bg-white rounded-t-3xl p-5 w-full max-h-[80vh] overflow-y-auto z-10 shadow-2xl"
+            style={{ scrollbarWidth: "none" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4" />
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="text-4xl">{selectedRecipe.emoji}</div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900" style={{ fontFamily: "Nunito, sans-serif" }}>{selectedRecipe.name}</h2>
+                  <p className="text-xs text-gray-400">{selectedRecipe.time} · {selectedRecipe.difficulty}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedRecipe(null)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4 leading-relaxed">{selectedRecipe.description}</p>
+            <div className="mb-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2.5">필요 재료</p>
+              <div className="flex flex-wrap gap-2">
+                {selectedRecipe.ingredients.map(ing => {
+                  const have = myNames.some(n => n.includes(ing) || ing.includes(n));
+                  return (
+                    <span key={ing} className={`text-sm px-3 py-1 rounded-full font-medium ${have ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400"}`}>
+                      {have ? "✓" : "✗"} {ing}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2.5">조리 순서</p>
+              <div className="space-y-3">
+                {selectedRecipe.steps.map((step, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 shadow-sm">
+                      {i + 1}
+                    </div>
+                    <p className="text-sm text-gray-700 leading-relaxed">{step}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============ MAIN APP ============
+export default function App() {
+  const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [ingredients, setIngredients] = useState<Ingredient[]>(INITIAL_INGREDIENTS);
+
+  const addIngredient = (data: Omit<Ingredient, "id">) => {
+    setIngredients(prev => [{ ...data, id: genId() }, ...prev]);
+    setActiveTab("ingredients");
+  };
+
+  const deleteIngredient = (id: string) => {
+    setIngredients(prev => prev.filter(i => i.id !== id));
+  };
+
+  const alertCount = ingredients.filter(i => {
+    const d = getDaysUntilExpiry(i.expiryDate);
+    return d >= 0 && d <= 3;
+  }).length;
+
+  const TABS = [
+    { id: "home" as Tab,        label: "홈",    Icon: Home },
+    { id: "ingredients" as Tab, label: "재료함", Icon: Package },
+    { id: "add" as Tab,         label: "추가",  Icon: Plus },
+    { id: "recipes" as Tab,     label: "레시피", Icon: ChefHat },
+  ];
+
+  return (
+    <div className="size-full flex justify-center bg-gray-200">
+      <div className="w-full max-w-sm flex flex-col bg-background relative overflow-hidden shadow-2xl" style={{ maxHeight: "100dvh", fontFamily: "Inter, sans-serif" }}>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {activeTab === "home" && <HomeView ingredients={ingredients} onAddClick={() => setActiveTab("add")} />}
+          {activeTab === "ingredients" && <IngredientsView ingredients={ingredients} onDelete={deleteIngredient} />}
+          {activeTab === "add" && <AddIngredientView onAdd={addIngredient} />}
+          {activeTab === "recipes" && <RecipesView ingredients={ingredients} />}
+        </div>
+
+        {/* Bottom navigation */}
+        <div className="flex-shrink-0 border-t border-gray-100 bg-white">
+          <div className="flex">
+            {TABS.map(({ id, label, Icon }) => {
+              const isActive = activeTab === id;
+              const isAdd = id === "add";
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`flex-1 flex flex-col items-center py-3 gap-0.5 transition-colors ${isAdd ? "" : isActive ? "text-green-600" : "text-gray-400"}`}
+                >
+                  {isAdd ? (
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md transition-colors ${isActive ? "bg-green-700" : "bg-green-600"} text-white`}>
+                      <Icon size={22} />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="relative">
+                        <Icon size={22} />
+                        {id === "home" && alertCount > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold">
+                            {alertCount}
+                          </span>
+                        )}
+                      </div>
+                      <span className={`text-[10px] font-semibold ${isActive ? "text-green-600" : "text-gray-400"}`}>{label}</span>
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
