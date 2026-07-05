@@ -1,0 +1,23 @@
+// hooks/useIngredients.ts 로 분리
+const useIngredients = () => {
+  const [ingredients, setIngredients] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchAll = async () => {
+    const res = await fetch("/api/ingredients");
+    setIngredients(await res.json());
+  };
+
+  const add = async (data) => {
+    await fetch("/api/ingredients", { method: "POST", body: JSON.stringify(data) });
+    fetchAll();
+  };
+
+  const remove = async (id) => {
+    await fetch(`/api/ingredients/${id}`, { method: "DELETE" });
+    setIngredients(prev => prev.filter(i => i.id !== id));
+  };
+
+  useEffect(() => { fetchAll(); }, []);
+  return { ingredients, loading, add, remove };
+};
