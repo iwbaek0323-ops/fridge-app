@@ -1,0 +1,5 @@
+backend/node_modules/
+backend/.env
+backend/config/vision-key.json
+backend/uploads/
+.DS_Store

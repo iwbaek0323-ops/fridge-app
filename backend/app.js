@@ -11,6 +11,8 @@ const postRoutes = require("./routes/postRoutes");
 const commentRoutes = require("./routes/commentRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const recipeRoutes = require("./routes/recipeRoutes");
+const ocrRoutes = require("./routes/ocrRoutes");
+
 
 
 const app = express();
@@ -24,6 +26,7 @@ app.use("/api/posts", postRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/recipes", recipeRoutes);
+app.use("/api/ocr", ocrRoutes);
 
 app.get("/api/test", verifyToken, (req, res) => {
 

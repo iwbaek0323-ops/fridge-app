@@ -16,10 +16,15 @@
 
 ```
 backend
+├── app.js
+├── package.json
+├── package-lock.json
 ├── config
 ├── controllers
 ├── database
+│   └── naengteol_db.sql
 ├── docs
+│   └── api
 ├── middleware
 ├── models
 ├── public
